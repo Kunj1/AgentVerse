@@ -29,6 +29,8 @@ if 'show_add_project' not in st.session_state:
     st.session_state.show_add_project = False
 if 'active_project_id' not in st.session_state:
     st.session_state.active_project_id = None
+if 'clear_chat_input' not in st.session_state:
+    st.session_state.clear_chat_input = False
 
 # CSS for styling
 st.markdown("""
@@ -39,7 +41,8 @@ st.markdown("""
         padding: 10px;
     }
     .user-message {
-        background-color: #f0f2f6;
+        background-color: #2f2f2f;  /* Dark grey */
+        color: white;
         padding: 15px;
         border-radius: 15px;
         margin: 10px 0;
@@ -48,7 +51,8 @@ st.markdown("""
         margin-left: auto;
     }
     .assistant-message {
-        background-color: #e6f3ff;
+        background-color: #3a3a3a;  /* Medium grey */
+        color: white;
         padding: 15px;
         border-radius: 15px;
         margin: 10px 0;
@@ -57,19 +61,20 @@ st.markdown("""
     }
     .timestamp {
         font-size: 0.8em;
-        color: #888;
+        color: #aaa;
         margin-top: 5px;
     }
     .project-card {
         cursor: pointer;
         padding: 20px;
         border-radius: 10px;
-        background-color: #f9f9f9;
+        background-color: #2c2c2c;  /* Slightly lighter grey */
+        color: white;
         margin: 10px 0;
         transition: all 0.3s;
     }
     .project-card:hover {
-        background-color: #e6f3ff;
+        background-color: #444444;
         transform: translateY(-2px);
     }
     .header-container {
@@ -104,6 +109,7 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
 
 # Function to fetch all projects
 def get_projects():
@@ -209,8 +215,9 @@ def navigate_to(page, project_id=None):
     st.session_state.current_page = page
     if project_id is not None:
         st.session_state.current_project_id = project_id
-        # Set as active project when navigating to it
-        st.session_state.active_project_id = project_id
+        # Only set as active project when creating a new project
+        if page == "chat" and st.session_state.show_add_project:
+            st.session_state.active_project_id = project_id
     st.rerun()
 
 # Function to toggle the add project popup
@@ -323,7 +330,7 @@ def create_risk_heatmap(risks):
     ))
     
     fig.update_layout(
-        title="Risk Heatmap (Probability vs. Impact)",
+        title="Risk Evaluation Chart (Probability vs. Impact)",
         xaxis_title="Probability",
         yaxis_title="Impact",
         xaxis=dict(range=[0, 1]),
@@ -518,6 +525,8 @@ def render_landing_page():
                         
                         if success:
                             st.success("Project created successfully!")
+                            # Set this as the active project since it's new
+                            st.session_state.active_project_id = project_id
                             navigate_to("chat", project_id)
                         else:
                             st.error("Failed to initialize chat")
@@ -541,17 +550,20 @@ def render_landing_page():
                 """, unsafe_allow_html=True)
             with col2:
                 if st.button("View", key=f"view_{project.get('project_id')}"):
+                    # When viewing an existing project, don't set it as active
                     navigate_to("chat", project.get('project_id'))
 
 # Layout for the chat page
+# Add this modified render_chat_page() function:
+
 def render_chat_page():
     project_id = st.session_state.current_project_id
-    
+
     # Get all projects to display the current project name
     projects = get_projects()
     current_project = next((p for p in projects if p.get('project_id') == project_id), None)
     project_name = current_project.get('name', f"Project {project_id}") if current_project else f"Project {project_id}"
-    
+
     # Header with navigation
     col1, col2 = st.columns([1, 5])
     with col1:
@@ -559,133 +571,180 @@ def render_chat_page():
             navigate_to("landing")
     with col2:
         st.header(f"{project_name}")
-    
+
     # Tabs
     tab1, tab2 = st.tabs(["Chat", "Visualization"])
-    
+
     with tab1:
-        # Chat history
-        chat_container = st.container()
-        with chat_container:
-            st.subheader("Project Risk Analysis")
-            
-            chat_history = get_chat_history(project_id)
-            
-            if not chat_history:
-                st.info("No chat history found for this project.")
-            else:
-                for entry in chat_history:
-                    # User message
-                    message = entry.get("message")
-                    if message:
-                        st.markdown(f"""
-                        <div class="user-message">
-                            <p>{message}</p>
-                            <div class="timestamp">{format_timestamp(entry.get("timestamp"))}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    # Assistant response
-                    response = entry.get("response")
-                    if response:
-                        st.markdown(f"""
-                        <div class="assistant-message">
-                            <p>{response}</p>
-                            <div class="timestamp">{format_timestamp(entry.get("timestamp"))}</div>
-                        </div>
-                        """, unsafe_allow_html=True)
+        # Check if this is an active project (created in current session)
+        is_active_project = st.session_state.active_project_id == project_id
         
-        # Input for new messages
-        # Input for new messages
-        # Input for new messages
-        st.markdown("---")
-        with st.form(key="chat_form"):
-            user_message = st.text_area("Ask a question about project risks:", height=100, key="chat_input")
-            
-            # Check if this is a previous chat or current chat
-            is_active_chat = st.session_state.active_project_id == project_id
-            
-            if not is_active_chat:
-                st.warning("Sending messages not allowed for previous chats. View-only mode")
-                disabled = True
-            else:
-                disabled = False
-                
-            submitted = st.form_submit_button("Send", disabled=disabled)
-            
-            if submitted and user_message and not disabled:
-                # Continue chat
-                response = continue_chat(project_id, user_message)
-                if response:
-                    st.rerun()
+        if is_active_project:
+            render_active_chat(project_id)
+        else:
+            render_chat_history(project_id)
     
     with tab2:
-        st.subheader("Risk Visualizations")
+        render_visualizations()
+
+# Function to render chat history (read-only, no input box)
+def render_chat_history(project_id):
+    st.subheader("Project Risk Analysis History")
+    st.info("Viewing chat history only. Create a new project to start a conversation.")
+    
+    chat_history = get_chat_history(project_id)
+
+    if not chat_history:
+        st.info("No chat history found for this project.")
+    else:
+        for entry in chat_history:
+            # User message
+            message = entry.get("message")
+            if message:
+                st.markdown(f"""
+                <div class="user-message">
+                    <p>{message}</p>
+                    <div class="timestamp">{format_timestamp(entry.get("timestamp"))}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Assistant response
+            response = entry.get("response")
+            if response:
+                st.markdown(f"""
+                <div class="assistant-message">
+                    <p>{response}</p>
+                    <div class="timestamp">{format_timestamp(entry.get("timestamp"))}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+# Function to render active chat with input box
+def render_active_chat(project_id):
+    st.subheader("Project Risk Analysis")
+    
+    # Chat history
+    chat_history = get_chat_history(project_id)
+
+    if not chat_history:
+        st.info("No messages yet. Start a conversation below.")
+    else:
+        for entry in chat_history:
+            # User message
+            message = entry.get("message")
+            if message:
+                st.markdown(f"""
+                <div class="user-message">
+                    <p>{message}</p>
+                    <div class="timestamp">{format_timestamp(entry.get("timestamp"))}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # Assistant response
+            response = entry.get("response")
+            if response:
+                st.markdown(f"""
+                <div class="assistant-message">
+                    <p>{response}</p>
+                    <div class="timestamp">{format_timestamp(entry.get("timestamp"))}</div>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    # Input for new messages
+    st.markdown("---")
+    
+    # Initialize the clear chat input flag if not already set
+    if 'clear_chat_input' not in st.session_state:
+        st.session_state.clear_chat_input = False
         
-        # Load sample data for visualizations
-        sample_data = get_sample_data()
+    # Create a default value for the text area
+    default_value = "" if st.session_state.clear_chat_input else st.session_state.get("chat_input", "")
+    
+    # Reset the clear flag after it's been used
+    if st.session_state.clear_chat_input:
+        st.session_state.clear_chat_input = False
+    
+    with st.form(key="chat_form"):
+        user_message = st.text_area("Ask a question about project risks:", 
+                                   value=default_value,
+                                   height=100, 
+                                   key="chat_input")
+        submitted = st.form_submit_button("Send")
+
+        if submitted and user_message:
+            response = continue_chat(project_id, user_message)
+            if response:
+                # Set the flag to clear the input on next render
+                st.session_state.clear_chat_input = True
+                st.rerun()
+
+# Function to render visualizations tab
+def render_visualizations():
+    st.subheader("Risk Visualizations")
+    
+    # Load sample data for visualizations
+    sample_data = get_sample_data()
+    
+    # Project health visualization
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.markdown("### Project Health Score")
+        health_gauge = render_project_health_gauge(sample_data["health_percentage"])
+        st.plotly_chart(health_gauge, use_container_width=True)
+    
+    with col2:
+        st.markdown("### Project Status")
+        st.markdown("""
+        - **Schedule Status:** Moderately Delayed
+        - **Resource Status:** At Risk
+        - **Budget Status:** Healthy
+        - **Completion:** 42.5%
         
-        # Project health visualization
-        col1, col2 = st.columns([1, 2])
-        with col1:
-            st.markdown("### Project Health Score")
-            health_gauge = render_project_health_gauge(sample_data["health_percentage"])
-            st.plotly_chart(health_gauge, use_container_width=True)
-        
-        with col2:
-            st.markdown("### Project Status")
-            st.markdown("""
-            - **Schedule Status:** Moderately Delayed
-            - **Resource Status:** At Risk
-            - **Budget Status:** Healthy
-            - **Completion:** 42.5%
-            
-            **Executive Summary:**
-            The project is currently at risk with several critical schedule delays and resource constraints. 
-            Key stakeholders should focus on addressing the critical risks related to schedule and resources.
-            """)
-        
-        # Risk visualizations
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("### Risk Breakdown")
-            risk_breakdown = create_risk_breakdown_chart(sample_data["identified_risks"])
-            st.plotly_chart(risk_breakdown, use_container_width=True)
-        
-        with col2:
-            st.markdown("### Risk Heatmap")
-            risk_heatmap = create_risk_heatmap(sample_data["identified_risks"])
-            st.plotly_chart(risk_heatmap, use_container_width=True)
-        
-        # Risk trend chart
-        st.markdown("### Risk Trend Over Time")
-        risk_trend = create_risk_trend_chart(sample_data["risk_history"])
-        st.plotly_chart(risk_trend, use_container_width=True)
-        
-        # Project timeline
-        st.markdown("### Project Timeline")
-        timeline_chart = create_timeline_chart(sample_data["milestones"])
-        st.plotly_chart(timeline_chart, use_container_width=True)
-        
-        # Risk table
-        st.markdown("### Identified Risks")
-        risks_df = pd.DataFrame(sample_data["identified_risks"])
-        st.dataframe(risks_df, use_container_width=True)
-        
-        # Mitigation recommendations
-        st.markdown("### Risk Mitigation Recommendations")
-        
-        critical_risks = [r for r in sample_data["identified_risks"] if r["severity"] == "Critical"]
-        for risk in critical_risks:
-            st.error(f"**{risk['factor']}**: {risk['description']}")
-            st.markdown("""
-            **Recommended Actions:**
-            - Review resource allocation and consider adding temporary contractors
-            - Implement fast-tracking by overlapping activities
-            - Schedule urgent stakeholder meeting to address approval delays
-            """)
-            st.markdown("---")
+        **Executive Summary:**
+        The project is currently at risk with several critical schedule delays and resource constraints. 
+        Key stakeholders should focus on addressing the critical risks related to schedule and resources.
+        """)
+    
+    # Risk visualizations
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("### Risk Breakdown")
+        risk_breakdown = create_risk_breakdown_chart(sample_data["identified_risks"])
+        st.plotly_chart(risk_breakdown, use_container_width=True)
+    
+    with col2:
+        st.markdown("### Risk Evaluation Chart")
+        risk_heatmap = create_risk_heatmap(sample_data["identified_risks"])
+        st.plotly_chart(risk_heatmap, use_container_width=True)
+    
+    # Risk trend chart
+    st.markdown("### Risk Trend Over Time")
+    risk_trend = create_risk_trend_chart(sample_data["risk_history"])
+    st.plotly_chart(risk_trend, use_container_width=True)
+    
+    # Project timeline
+    st.markdown("### Project Timeline")
+    timeline_chart = create_timeline_chart(sample_data["milestones"])
+    st.plotly_chart(timeline_chart, use_container_width=True)
+    
+    # Risk table
+    st.markdown("### Identified Risks")
+    risks_df = pd.DataFrame(sample_data["identified_risks"])
+    st.dataframe(risks_df, use_container_width=True)
+    
+    # Mitigation recommendations
+    st.markdown("### Risk Mitigation Recommendations")
+    
+    critical_risks = [r for r in sample_data["identified_risks"] if r["severity"] == "Critical"]
+    for risk in critical_risks:
+        st.error(f"**{risk['factor']}**: {risk['description']}")
+        st.markdown("""
+        **Recommended Actions:**
+        - Review resource allocation and consider adding temporary contractors
+        - Implement fast-tracking by overlapping activities
+        - Schedule urgent stakeholder meeting to address approval delays
+        """)
+        st.markdown("---")
 
 # Main app logic
 def main():

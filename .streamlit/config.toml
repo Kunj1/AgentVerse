@@ -1,0 +1,7 @@
+[theme]
+base = "light"
+backgroundColor = "#000000"  # pure black
+secondaryBackgroundColor = "#1a1a1a"  # for containers, sidebar, etc.
+textColor = "#FFFFFF"  # white text
+primaryColor = "#4E9AF1"  # button highlights, etc.
+font = "sans serif"
