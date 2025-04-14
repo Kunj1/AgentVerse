@@ -27,6 +27,8 @@ if 'current_tab' not in st.session_state:
     st.session_state.current_tab = 'chat'
 if 'show_add_project' not in st.session_state:
     st.session_state.show_add_project = False
+if 'active_project_id' not in st.session_state:
+    st.session_state.active_project_id = None
 
 # CSS for styling
 st.markdown("""
@@ -160,13 +162,25 @@ def continue_chat(project_id, text):
             f"{BASE_URL}/chat/continue/{project_id}",
             json={"text": text}
         )
+        
+        # Check if response is plain text (not JSON)
+        if response.headers.get('content-type') == 'text/plain':
+            return response.text
+        
+        # For JSON responses
         if response.status_code == 200:
-            return response.json()
+            try:
+                return response.json()
+            except:
+                return response.text
         else:
             st.error(f"Error sending message: {response.status_code}")
+            st.error(f"Response text: {response.text}")
             return None
     except Exception as e:
         st.error(f"Error connecting to API: {e}")
+        st.error("This might be due to CORS issues if you're running the frontend locally.")
+        st.info("Check that your backend has CORS configured correctly for localhost.")
         return None
 
 # Function to get chat history
@@ -195,6 +209,8 @@ def navigate_to(page, project_id=None):
     st.session_state.current_page = page
     if project_id is not None:
         st.session_state.current_project_id = project_id
+        # Set as active project when navigating to it
+        st.session_state.active_project_id = project_id
     st.rerun()
 
 # Function to toggle the add project popup
@@ -214,6 +230,7 @@ def render_project_health_gauge(health_percentage):
         value=health_percentage,
         domain={'x': [0, 1], 'y': [0, 1]},
         title={'text': "Project Health"},
+        number={'font': {'size': 40}, 'suffix': '%'},  # Improved number formatting
         gauge={
             'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkblue"},
             'bar': {'color': "darkblue"},
@@ -228,7 +245,13 @@ def render_project_health_gauge(health_percentage):
                 'line': {'color': "red", 'width': 4},
                 'thickness': 0.75,
                 'value': health_percentage}}))
-    fig.update_layout(height=300)
+    
+    # Center the gauge correctly
+    fig.update_layout(
+        height=300,
+        margin=dict(l=20, r=20, t=50, b=20),
+        autosize=True
+    )
     return fig
 
 def create_risk_breakdown_chart(risks):
@@ -573,12 +596,24 @@ def render_chat_page():
                         """, unsafe_allow_html=True)
         
         # Input for new messages
+        # Input for new messages
+        # Input for new messages
         st.markdown("---")
         with st.form(key="chat_form"):
             user_message = st.text_area("Ask a question about project risks:", height=100, key="chat_input")
-            submitted = st.form_submit_button("Send")
             
-            if submitted and user_message:
+            # Check if this is a previous chat or current chat
+            is_active_chat = st.session_state.active_project_id == project_id
+            
+            if not is_active_chat:
+                st.warning("Sending messages not allowed for previous chats. View-only mode")
+                disabled = True
+            else:
+                disabled = False
+                
+            submitted = st.form_submit_button("Send", disabled=disabled)
+            
+            if submitted and user_message and not disabled:
                 # Continue chat
                 response = continue_chat(project_id, user_message)
                 if response:
