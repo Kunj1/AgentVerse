@@ -94,6 +94,11 @@ The system requires the following CSV files for comprehensive risk analysis:
 - Frontend: [https://agentversebycorpusbound.streamlit.app/](https://agentversebycorpusbound.streamlit.app/)
 - Backend API: [https://agentverse.onrender.com/](https://agentverse.onrender.com/)
 
+## Github Repositories
+
+- **Frontend**: [https://github.com/Kunj1/AgentVerse](https://github.com/Kunj1/AgentVerse)
+- **Backend**: [https://github.com/Kunj1/risk_management](https://github.com/Kunj1/risk_management)
+
 ## 📜 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
