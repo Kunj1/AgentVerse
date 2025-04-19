@@ -748,6 +748,11 @@ def render_visualizations():
 
 # Main app logic
 def main():
+    # Add ping route support to keep app alive
+    if "ping" in st.query_params:
+        st.write("✅ Ping received. App is alive.")
+        return
+
     if st.session_state.current_page == "landing":
         render_landing_page()
     elif st.session_state.current_page == "chat":
