@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # Define the base URL for the API
-BASE_URL = "https://agentverse.onrender.com"
+BASE_URL = "https://agentverse-uz89.onrender.com"
 
 # Define session state variables
 if 'current_page' not in st.session_state:
